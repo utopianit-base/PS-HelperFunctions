@@ -1,4 +1,4 @@
-﻿# PowerShell & Azure & O365 Helper Functions
+# PowerShell & Azure & O365 Helper Functions
 
 function require-Module {
     param ([string]$Name,[boolean]$isInteractive=$true,[boolean]$AlwaysUpdate=$false)
@@ -49,13 +49,48 @@ function errorAndExit([string]$message)
 }
 
 function require-AzConnect {
-    # Connect to Azure manually as an appropriate Administrative user
+    # Connect to Azure (az Module) manually as an appropriate Administrative user (Supportd MFA)
     $AzConnection = Get-AzContext -ErrorAction SilentlyContinue
     if(-not ($AzConnection.Tenant.Id)) {
-        AzConnection = Connect-AzAccount
+        $AzConnection = Connect-AzAccount
+        $AzConnectionTest = Get-AzContext -ErrorAction SilentlyContinue
+        if($AzConnectionTest.Tenant.Id) {
+            write-host "Logged into Azure (az) as $($AzConnectionTest.Account.Id) successfully" -ForegroundColor Green
+        } else {
+            write-host "Connect into Azure (az) failed" -ForegroundColor Red
+        }
     } else {
-        write-host "Already logged into Azure as $($AzConnection.Account.Id)" -ForegroundColor Green
+        write-host "Already logged into Azure (az) as $($AzConnection.Account.Id)" -ForegroundColor Green
     }
+}
+
+function purge-AzConnect {
+    $Silence = Disconnect-AzAccount -Scope CurrentUser
+}
+
+function require-AzureADConnect {
+    # Connect to Azure (AzureAD Module) manually as an appropriate Administrative user (Supports MFA)
+    if($GLOBAL:AzureADConnection.Account.Id) {
+        $AzureADConnectionTest = Get-AzureADUser -ObjectId $GLOBAL:AzureADConnection.Account.Id -ErrorAction SilentlyContinue
+    }
+    if(($AzureADConnectionTest.UserPrincipalName -ne $GLOBAL:AzureADConnection.Account.Id) -and (-not ($GLOBAL:AzureADConnection.Tenant.Id))) {
+        $GLOBAL:AzureADConnection = Connect-AzureAD
+
+        $AzureADConnectionTest = Get-AzureADUser -ObjectId $GLOBAL:AzureADConnection.Account.Id -ErrorAction SilentlyContinue
+        
+        if($GLOBAL:AzureADConnection.Account.Id -eq $AzureADConnectionTest.UserPrincipalName) {
+            write-host "Logged into Azure (AzureAD) as $($GLOBAL:AzureADConnection.Account.Id) successfully" -ForegroundColor Green
+        } else {
+            write-host "Connect into Azure (AzureAD) failed" -ForegroundColor Red
+        }
+    } else {
+        write-host "Already logged into Azure (AzureAD) as $($GLOBAL:AzureADConnection.Account.Id)" -ForegroundColor Green
+    }
+}
+
+function purge-AzureADConnect {
+    $GLOBAL:AzureADConnection = ''
+    $Silence = Disconnect-AzureAD
 }
 
 function require-MSOLConnect {
@@ -167,7 +202,7 @@ Function Create-PSOFunction([string]$Name,[string[]]$Fields,[boolean]$Validate=$
                 $FieldName = $SplitParams[1]
             } else {
                 $FieldType = ''
-                $FieldName = $SplitParams[1]
+                $FieldName = $Field
             }
             $Params += $FieldType + '$' + $FieldName
             $SetItem.Add('FieldType',[string]$FieldType)
